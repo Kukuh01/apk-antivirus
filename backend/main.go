@@ -72,7 +72,7 @@ func NewDatabase(dbPath string) (*Database, error) {
 		CREATE TABLE IF NOT EXISTS virus_signatures (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
-			md5_hash TEXT,
+			md5_hash TEXT UNIQUE,
 			binary_pattern TEXT,
 			severity TEXT,
 			description TEXT,
@@ -101,7 +101,7 @@ func (d *Database) Close() error {
 
 func (d *Database) AddVirusSignature(virus *VirusSignature) error {
 	_, err := d.db.Exec(`
-		INSERT INTO virus_signatures (name, md5_hash, binary_pattern, severity, description)
+		INSERT OR IGNORE INTO virus_signatures (name, md5_hash, binary_pattern, severity, description)
 		VALUES (?, ?, ?, ?, ?)
 	`, virus.Name, virus.MD5Hash, virus.BinaryPattern, virus.Severity, virus.Description)
 	return err
@@ -474,44 +474,167 @@ func (h *Handler) DeleteSignature(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"message": "Signature deleted successfully"})
 }
 
+// func (h *Handler) AddSampleFile(w http.ResponseWriter, r *http.Request) {
+// 	var req struct {
+// 		FilePath    string `json:"file_path"`
+// 		VirusName   string `json:"virus_name"`
+// 		Severity    string `json:"severity"`
+// 		Description string `json:"description"`
+// 	}
+
+// 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+// 		http.Error(w, err.Error(), http.StatusBadRequest)
+// 		return
+// 	}
+
+// 	// Calculate MD5
+// 	md5Hash, err := h.md5Scanner.CalculateMD5(req.FilePath)
+// 	if err != nil {
+// 		http.Error(w, "Failed to calculate MD5", http.StatusInternalServerError)
+// 		return
+// 	}
+
+// 	virus := VirusSignature{
+// 		Name:        req.VirusName,
+// 		MD5Hash:     md5Hash,
+// 		Severity:    req.Severity,
+// 		Description: req.Description,
+// 	}
+
+// 	if err := h.db.AddVirusSignature(&virus); err != nil {
+// 		http.Error(w, err.Error(), http.StatusInternalServerError)
+// 		return
+// 	}
+
+// 	h.loadSignatures()
+
+//		w.WriteHeader(http.StatusCreated)
+//		json.NewEncoder(w).Encode(map[string]interface{}{
+//			"message": "Sample added successfully",
+//			"md5":     md5Hash,
+//		})
+//	}
 func (h *Handler) AddSampleFile(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		FilePath    string `json:"file_path"`
-		VirusName   string `json:"virus_name"`
-		Severity    string `json:"severity"`
-		Description string `json:"description"`
-	}
+	// Batasi ukuran upload (misalnya 50 MB)
+	const maxUploadSize = 50 << 20 // 50 MB
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+		http.Error(w, "failed parse multipart form: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// Calculate MD5
-	md5Hash, err := h.md5Scanner.CalculateMD5(req.FilePath)
+	file, fh, err := r.FormFile("file")
 	if err != nil {
-		http.Error(w, "Failed to calculate MD5", http.StatusInternalServerError)
+		http.Error(w, "file is required: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Optional: read other form fields
+	name := r.FormValue("name")
+	if name == "" {
+		name = fh.Filename
+	}
+	severity := r.FormValue("severity")
+	description := r.FormValue("description")
+
+	// Ensure quarantine dir exists
+	quarantineDir := "./quarantine"
+	if err := os.MkdirAll(quarantineDir, 0700); err != nil {
+		http.Error(w, "failed create quarantine dir: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	virus := VirusSignature{
-		Name:        req.VirusName,
-		MD5Hash:     md5Hash,
-		Severity:    req.Severity,
-		Description: req.Description,
+	// Create quarantine file (unique name)
+	tmpName := strconv.FormatInt(time.Now().UnixNano(), 10) + "-" + filepath.Base(fh.Filename)
+	tmpPath := filepath.Join(quarantineDir, tmpName)
+
+	outFile, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600) // no-exec
+	if err != nil {
+		http.Error(w, "failed create quarantine file: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer outFile.Close()
+
+	// Compute MD5 and capture first N bytes for binary pattern while streaming
+	hasher := md5.New()
+	const patternLen = 256 // ambil 256 byte pertama; ubah sesuai kebutuhan
+	firstBytes := make([]byte, 0, patternLen)
+	buf := make([]byte, 32*1024)
+
+	for {
+		n, readErr := file.Read(buf)
+		if n > 0 {
+			chunk := buf[:n]
+			// write to quarantine file
+			if _, err := outFile.Write(chunk); err != nil {
+				// cleanup file if write failed
+				outFile.Close()
+				os.Remove(tmpPath)
+				http.Error(w, "failed write file: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			// update md5
+			if _, err := hasher.Write(chunk); err != nil {
+				outFile.Close()
+				os.Remove(tmpPath)
+				http.Error(w, "hash error: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			// collect first bytes
+			if len(firstBytes) < patternLen {
+				need := patternLen - len(firstBytes)
+				if need > n {
+					need = n
+				}
+				firstBytes = append(firstBytes, chunk[:need]...)
+			}
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			outFile.Close()
+			os.Remove(tmpPath)
+			http.Error(w, "read error: "+readErr.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
-	if err := h.db.AddVirusSignature(&virus); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	md5sum := hex.EncodeToString(hasher.Sum(nil))
+	binaryPattern := hex.EncodeToString(firstBytes)
+
+	// Insert to DB: only md5 and binary_pattern (with metadata)
+	virus := &VirusSignature{
+		Name:          name,
+		MD5Hash:       md5sum,
+		BinaryPattern: binaryPattern,
+		Severity:      severity,
+		Description:   description,
+	}
+
+	// Try insert; if duplicate md5, we can ignore or return existing info
+	if err := h.db.AddVirusSignature(virus); err != nil {
+		// if duplicate or other DB error, cleanup and return
+		// but if duplicate, we might still want to keep quarantine file (or delete) — here we delete to avoid storing duplicate samples
+		outFile.Close()
+		// optional: if want to keep duplicates, remove this Remove call
+		os.Remove(tmpPath)
+		http.Error(w, "db insert error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// reload signatures in memory
 	h.loadSignatures()
 
+	// Return md5 and binary_pattern
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Sample added successfully",
-		"md5":     md5Hash,
+	json.NewEncoder(w).Encode(map[string]string{
+		"message":        "Sample added successfully",
+		"md5":            md5sum,
+		"binary_pattern": binaryPattern,
 	})
 }
 

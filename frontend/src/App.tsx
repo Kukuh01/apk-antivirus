@@ -129,31 +129,74 @@ const AntivirusApp = () => {
     }
   };
 
-  const addSample = async (e) => {
-    e.preventDefault();
+  // const addSample = async (e) => {
+  //   e.preventDefault();
     
-    if (!newSample.file_path || !newSample.virus_name) {
-      alert('Please fill in required fields');
-      return;
+  //   if (!newSample.file_path || !newSample.virus_name) {
+  //     alert('Please fill in required fields');
+  //     return;
+  //   }
+
+  //   try {
+  //     const response = await fetch(`${API_URL}/add-sample`, {
+  //       method: 'POST',
+  //       headers: { 'Content-Type': 'application/json' },
+  //       body: JSON.stringify(newSample)
+  //     });
+      
+  //     const data = await response.json();
+  //     fetchSignatures();
+  //     fetchStats();
+  //     setNewSample({ file_path: '', virus_name: '', severity: 'Medium', description: '' });
+  //     alert(`Sample added successfully! MD5: ${data.md5}`);
+  //   } catch (error) {
+  //     console.error('Failed to add sample:', error);
+  //     alert('Failed to add sample');
+  //   }
+  // };
+
+// bagian dalam AntivirusApp atau komponen AddSample
+const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const f = e.target.files?.[0];
+  if (f) setFileToUpload(f);
+};
+
+const [fileToUpload, setFileToUpload] = useState<File | null>(null);
+
+const addSample = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!fileToUpload) return alert('Pilih file sample terlebih dahulu');
+  if (!newSample.virus_name) return alert('Isi nama virus');
+
+  try {
+    const form = new FormData();
+    form.append('file', fileToUpload);
+    form.append('name', newSample.virus_name);
+    form.append('severity', newSample.severity);
+    form.append('description', newSample.description || '');
+
+    const res = await fetch(`${API_URL}/add-sample`, {
+      method: 'POST',
+      body: form,
+    });
+
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(t || `HTTP ${res.status}`);
     }
 
-    try {
-      const response = await fetch(`${API_URL}/add-sample`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newSample)
-      });
-      
-      const data = await response.json();
-      fetchSignatures();
-      fetchStats();
-      setNewSample({ file_path: '', virus_name: '', severity: 'Medium', description: '' });
-      alert(`Sample added successfully! MD5: ${data.md5}`);
-    } catch (error) {
-      console.error('Failed to add sample:', error);
-      alert('Failed to add sample');
-    }
-  };
+    const data = await res.json(); // { md5: '', binary_pattern: '' }
+    // update UI state, fetchSignatures, dsb.
+    await fetchSignatures();
+    await fetchStats();
+    setNewSample({ file_path: '', virus_name: '', severity: 'Medium', description: '' });
+    setFileToUpload(null);
+    alert(`Sample added. MD5: ${data.md5}`);
+  } catch (err: any) {
+    console.error(err);
+    alert('Failed to upload sample: ' + (err.message ?? err));
+  }
+};
 
   const deleteSignature = async (id) => {
     if (!confirm('Are you sure you want to delete this signature?')) return;
@@ -559,15 +602,14 @@ const AntivirusApp = () => {
 
               <form onSubmit={addSample} className="space-y-4">
                 <div>
-                  <label className="block text-slate-300 mb-2 font-medium">Sample File Path *</label>
+                  <label className="block text-slate-300 mb-2 font-medium">Sample File *</label>
                   <input
-                    type="text"
-                    placeholder="e.g., C:\malware-samples\virus.exe"
-                    value={newSample.file_path}
-                    onChange={(e) => setNewSample({...newSample, file_path: e.target.value})}
-                    className="w-full bg-slate-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                    required
+                    type="file"
+                    accept="*/*"
+                    onChange={handleFileChange}
+                    className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg"
                   />
+                  <p className="text-slate-400 text-sm mt-2">Pilih file sample (malware) — file akan di-hash & disimpan hanya hash/pattern di DB.</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
