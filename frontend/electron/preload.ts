@@ -1,24 +1,33 @@
-import { ipcRenderer, contextBridge } from 'electron'
+// preload.mjs
 
-// --------- Expose some API to the Renderer process ---------
-contextBridge.exposeInMainWorld('ipcRenderer', {
-  on(...args: Parameters<typeof ipcRenderer.on>) {
-    const [channel, listener] = args
-    return ipcRenderer.on(channel, (event, ...args) => listener(event, ...args))
-  },
-  off(...args: Parameters<typeof ipcRenderer.off>) {
-    const [channel, ...omit] = args
-    return ipcRenderer.off(channel, ...omit)
-  },
-  send(...args: Parameters<typeof ipcRenderer.send>) {
-    const [channel, ...omit] = args
-    return ipcRenderer.send(channel, ...omit)
-  },
-  invoke(...args: Parameters<typeof ipcRenderer.invoke>) {
-    const [channel, ...omit] = args
-    return ipcRenderer.invoke(channel, ...omit)
-  },
+// Gunakan 'import' karena ini file .mjs (ES Module)
+import { contextBridge, ipcRenderer } from 'electron';
 
-  // You can expose other APTs you need here.
-  // ...
-})
+// --- 1. BLOK API FILE (YANG HILANG) ---
+// Ini yang akan dipanggil oleh React (window.electronAPI.openFile)
+contextBridge.exposeInMainWorld('electronAPI', {
+  /**
+   * Membuka dialog file native dan mengembalikan path file yang dipilih.
+   * @returns {Promise<string | null>} Path file atau null jika dibatalkan.
+   */
+  openFile: () => ipcRenderer.invoke('dialog:openFile')
+});
+// --- AKHIR BLOK ---
+
+
+// 2. Kode bridge 'ipcRenderer' bawaan Anda (bisa disimpan)
+// Ini mengekspos window.ipcRenderer...
+contextBridge.exposeInMainWorld("ipcRenderer", {
+  on: (channel, listener) => {
+    ipcRenderer.on(channel, (event, ...args) => listener(event, ...args));
+  },
+  off: (channel, ...omit) => {
+    ipcRenderer.off(channel, ...omit);
+  },
+  send: (channel, ...omit) => {
+    ipcRenderer.send(channel, ...omit);
+  },
+  invoke: (channel, ...omit) => {
+    return ipcRenderer.invoke(channel, ...omit);
+  }
+});

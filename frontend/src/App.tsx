@@ -10,7 +10,7 @@ const AntivirusApp = () => {
   const [signatures, setSignatures] = useState([]);
   const [scanResults, setScanResults] = useState([]);
   const [scanning, setScanning] = useState(false);
-  const [selectedFile, setSelectedFile] = useState('');
+  const [selectedFilePath, setSelectedFilePath] = useState('');
   const [selectedFolder, setSelectedFolder] = useState('');
   
   // Form states
@@ -54,74 +54,44 @@ const AntivirusApp = () => {
     }
   };
 
-  const scanFile = async () => {
-    if (!selectedFile) {
-      alert("Please select a file first");
-      return;
-    }
+const scanFile = async () => {
+  if (!selectedFilePath) {
+    alert("Please select a file first");
+    return;
+  }
 
-    setScanning(true);
+  setScanning(true);
+  try {
+    const response = await fetch(`${API_URL}/scan-path`, {
+      method: "POST",
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ file_path: selectedFilePath })
+    });
+
+    const text = await response.text();
     try {
-      const formData = new FormData();
-      formData.append("file", selectedFile);
+      const result = JSON.parse(text);
+      setScanResults([result, ...scanResults]);
 
-      const response = await fetch(`${API_URL}/scan`, {
-        method: "POST",
-        body: formData, // ❗ jangan pakai Content-Type manual
-      });
-
-      // Pastikan response JSON
-      const text = await response.text();
-      try {
-        const result = JSON.parse(text);
-        setScanResults([result, ...scanResults]);
-      } catch (err) {
-        console.error("Invalid JSON response:", text);
-        alert("Invalid JSON response from server:\n" + text);
+      if (result.is_infected) {
+        alert(`Threat found and quarantined! Original file at ${selectedFilePath} has been moved.`);
+        setSelectedFilePath('');
       }
 
-    } catch (error) {
-      console.error("Scan failed:", error);
-      alert("Scan failed: " + error.message);
-    } finally {
-      setScanning(false);
+    } catch (err) {
+      console.error("Invalid JSON response:", text);
+      alert("Invalid JSON response from server:\n" + text);
     }
-  };
 
-  //   const scanFile = async () => {
-  //   if (!selectedFile) {
-  //     alert("Please select a file first!");
-  //     return;
-  //   }
-
-  //   setScanning(true);
-  //   setScanResults("");
-
-  //   try {
-  //     const formData = new FormData();
-  //     formData.append("file", selectedFile);
-
-  //     const res = await fetch(`${API_URL}/api/scan`, {
-  //       method: "POST",
-  //       body: formData,
-  //     });
-
-  //     if (!res.ok) throw new Error("Failed to scan file");
-
-  //     const data = await res.json();
-
-  //     if (data.detected) {
-  //       setScanResult(`⚠️ Detected: ${data.virus_name}`);
-  //     } else {
-  //       setScanResult("✅ File is clean");
-  //     }
-  //   } catch (err: any) {
-  //     console.error(err);
-  //     setScanResult("❌ Scan failed. Check backend logs.");
-  //   } finally {
-  //     setScanning(false);
-  //   }
-  // };
+  } catch (error) {
+    console.error("Scan failed:", error);
+    alert("Scan failed: " + error.message);
+  } finally {
+    setScanning(false);
+  }
+};
 
   const scanFolder = async () => {
     if (!selectedFolder) {
@@ -173,37 +143,17 @@ const AntivirusApp = () => {
     }
   };
 
-  // const addSample = async (e) => {
-  //   e.preventDefault();
-    
-  //   if (!newSample.file_path || !newSample.virus_name) {
-  //     alert('Please fill in required fields');
-  //     return;
-  //   }
-
-  //   try {
-  //     const response = await fetch(`${API_URL}/add-sample`, {
-  //       method: 'POST',
-  //       headers: { 'Content-Type': 'application/json' },
-  //       body: JSON.stringify(newSample)
-  //     });
-      
-  //     const data = await response.json();
-  //     fetchSignatures();
-  //     fetchStats();
-  //     setNewSample({ file_path: '', virus_name: '', severity: 'Medium', description: '' });
-  //     alert(`Sample added successfully! MD5: ${data.md5}`);
-  //   } catch (error) {
-  //     console.error('Failed to add sample:', error);
-  //     alert('Failed to add sample');
-  //   }
-  // };
-
-// bagian dalam AntivirusApp atau komponen AddSample
 const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
   const f = e.target.files?.[0];
   if (f) setFileToUpload(f);
 };
+
+const handleBrowseFile = async () => {
+  const filePath = await window.electronAPI.openFile();
+  if (filePath) {
+    setSelectedFilePath(filePath);
+  }
+}
 
 const [fileToUpload, setFileToUpload] = useState<File | null>(null);
 
@@ -397,21 +347,27 @@ const addSample = async (e: React.FormEvent) => {
                 <h3 className="text-xl font-bold text-white">Scan Single File</h3>
               </div>
 
-              <div className="flex flex-col space-y-4">
+            {/* --- BLOK YANG DIUBAH --- */}
+              <div className="flex space-x-3 mb-4">
                 <input
-                  type="file"
-                  onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                  className="block w-full text-sm text-slate-300
-                            file:mr-4 file:py-2 file:px-4
-                            file:rounded-md file:border-0
-                            file:text-sm file:font-semibold
-                            file:bg-purple-600 file:text-white
-                            hover:file:bg-purple-700"
+                  type="text"
+                  readOnly // Buat read-only
+                  value={selectedFilePath} // Tampilkan path yang dipilih
+                  placeholder="Click 'Browse' to select a file..."
+                  className="flex-1 bg-slate-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
+                <button
+                  onClick={handleBrowseFile} // Tombol baru
+                  className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                >
+                  Browse...
+                </button>
+              </div>
+              {/* --- AKHIR BLOK --- */}
 
                 <button
                   onClick={scanFile}
-                  disabled={scanning}
+                  disabled={scanning || !selectedFilePath}
                   className="bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600
                             text-white px-6 py-3 rounded-lg font-medium
                             transition-colors flex items-center justify-center space-x-2"
@@ -420,8 +376,6 @@ const addSample = async (e: React.FormEvent) => {
                   <span>{scanning ? "Scanning..." : "Scan File"}</span>
                 </button>
               </div>
-            </div>
-
 
             {/* Folder Scanner */}
             <div className="bg-slate-800 rounded-xl shadow-lg p-6">

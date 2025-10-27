@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain, dialog } from "electron";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -14,7 +14,11 @@ function createWindow() {
   win = new BrowserWindow({
     icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
     webPreferences: {
-      preload: path.join(__dirname, "preload.mjs")
+      preload: path.join(__dirname, "preload.mjs"),
+      // <-- 2. TAMBAHKAN INI! Wajib agar preload.ts berfungsi
+      contextIsolation: true,
+      nodeIntegration: false
+      // Praktik keamanan yang baik
     }
   });
   win.webContents.on("did-finish-load", () => {
@@ -37,7 +41,21 @@ app.on("activate", () => {
     createWindow();
   }
 });
-app.whenReady().then(createWindow);
+async function handleFileOpen() {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ["openFile"]
+    // Hanya izinkan pilih satu file
+  });
+  if (canceled) {
+    return null;
+  } else {
+    return filePaths[0];
+  }
+}
+app.whenReady().then(() => {
+  ipcMain.handle("dialog:openFile", handleFileOpen);
+  createWindow();
+});
 export {
   MAIN_DIST,
   RENDERER_DIST,
