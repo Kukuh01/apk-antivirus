@@ -322,38 +322,121 @@ func (h *Handler) loadSignatures() {
 	h.binaryScanner.LoadPatterns(binSigs)
 }
 
+// func (h *Handler) ScanFile(w http.ResponseWriter, r *http.Request) {
+// 	var req struct {
+// 		FilePath string `json:"file_path"`
+// 	}
+
+// 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+// 		http.Error(w, err.Error(), http.StatusBadRequest)
+// 		return
+// 	}
+
+// 	fileInfo, err := os.Stat(req.FilePath)
+// 	if err != nil {
+// 		http.Error(w, "File not found", http.StatusNotFound)
+// 		return
+// 	}
+
+// 	result := ScanResult{
+// 		FilePath:   req.FilePath,
+// 		IsInfected: false,
+// 		ScanTime:   time.Now(),
+// 		FileSize:   fileInfo.Size(),
+// 	}
+
+// 	// Try MD5 scan
+// 	infected, virusName, _ := h.md5Scanner.ScanFile(req.FilePath)
+// 	if infected {
+// 		result.IsInfected = true
+// 		result.VirusName = virusName
+// 		result.DetectionType = "MD5"
+// 	} else {
+// 		// Try binary scan
+// 		infected, virusName, _ = h.binaryScanner.ScanFile(req.FilePath)
+// 		if infected {
+// 			result.IsInfected = true
+// 			result.VirusName = virusName
+// 			result.DetectionType = "Binary Pattern"
+// 		}
+// 	}
+
+// 	// Save to history
+// 	h.db.AddScanHistory(&result)
+
+// 	w.Header().Set("Content-Type", "application/json")
+// 	json.NewEncoder(w).Encode(result)
+// }
+
 func (h *Handler) ScanFile(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		FilePath string `json:"file_path"`
-	}
+	// 1. Batasi ukuran upload (misalnya 50 MB)
+	const maxUploadSize = 50 << 20 // 50 MB
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+		log.Println("Error parsing multipart form:", err)
+		http.Error(w, "failed parse multipart form: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	fileInfo, err := os.Stat(req.FilePath)
+	// 2. Ambil file dari form data
+	// Key "file" harus cocok dengan di React: formData.append("file", selectedFile);
+	file, fh, err := r.FormFile("file")
 	if err != nil {
-		http.Error(w, "File not found", http.StatusNotFound)
+		log.Println("Error retrieving file from form:", err)
+		http.Error(w, "file is required: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// 3. Buat file sementara di server
+	// os.CreateTemp akan membuat file aman di direktori temp default
+	tempFile, err := os.CreateTemp("", "scan-*.tmp")
+	if err != nil {
+		log.Println("Error creating temp file:", err)
+		http.Error(w, "failed create temp file: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// Pastikan file ditutup DAN dihapus setelah fungsi selesai
+	defer tempFile.Close()
+	defer os.Remove(tempFile.Name()) // <-- Sangat Penting!
+
+	// 4. Salin isi file yang di-upload ke file sementara
+	if _, err := io.Copy(tempFile, file); err != nil {
+		log.Println("Error copying to temp file:", err)
+		http.Error(w, "failed write temp file: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// Dapatkan path file sementara
+	tempFilePath := tempFile.Name()
+
+	// Tutup file agar scanner bisa membukanya
+	// (Beberapa OS mengunci file yang sedang ditulis)
+	if err := tempFile.Close(); err != nil {
+		log.Println("Error closing temp file before scan:", err)
+		http.Error(w, "failed to close temp file before scan: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 5. Siapkan hasil scan (gunakan nama file asli dari upload)
 	result := ScanResult{
-		FilePath:   req.FilePath,
+		FilePath:   fh.Filename, // Laporkan nama file asli
 		IsInfected: false,
 		ScanTime:   time.Now(),
-		FileSize:   fileInfo.Size(),
+		FileSize:   fh.Size, // Ambil ukuran dari file header
 	}
 
-	// Try MD5 scan
-	infected, virusName, _ := h.md5Scanner.ScanFile(req.FilePath)
+	// 6. Jalankan pemindaian pada file sementara
+	// Coba scan MD5
+	infected, virusName, _ := h.md5Scanner.ScanFile(tempFilePath)
 	if infected {
 		result.IsInfected = true
 		result.VirusName = virusName
 		result.DetectionType = "MD5"
 	} else {
-		// Try binary scan
-		infected, virusName, _ = h.binaryScanner.ScanFile(req.FilePath)
+		// Coba scan Binary
+		infected, virusName, _ = h.binaryScanner.ScanFile(tempFilePath)
 		if infected {
 			result.IsInfected = true
 			result.VirusName = virusName
@@ -361,9 +444,10 @@ func (h *Handler) ScanFile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Save to history
+	// 7. Simpan ke riwayat
 	h.db.AddScanHistory(&result)
 
+	// 8. Kirim respon JSON
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
 }
@@ -637,6 +721,75 @@ func (h *Handler) AddSampleFile(w http.ResponseWriter, r *http.Request) {
 		"binary_pattern": binaryPattern,
 	})
 }
+
+// func ScanFileHandler(w http.ResponseWriter, r *http.Request) {
+// 	w.Header().Set("Content-Type", "application/json")
+
+// 	// Parse form-data
+// 	err := r.ParseMultipartForm(10 << 20) // 10MB max
+// 	if err != nil {
+// 		w.WriteHeader(http.StatusBadRequest)
+// 		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid form data"})
+// 		return
+// 	}
+
+// 	file, handler, err := r.FormFile("file")
+// 	if err != nil {
+// 		w.WriteHeader(http.StatusBadRequest)
+// 		json.NewEncoder(w).Encode(map[string]string{"error": "Missing file"})
+// 		return
+// 	}
+// 	defer file.Close()
+
+// 	// Hitung hash
+// 	hash := md5.New()
+// 	if _, err := io.Copy(hash, file); err != nil {
+// 		w.WriteHeader(http.StatusInternalServerError)
+// 		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to read file"})
+// 		return
+// 	}
+// 	md5sum := hex.EncodeToString(hash.Sum(nil))
+// 	file.Seek(0, 0)
+
+// 	// Cek di database
+// 	var virusName string
+// 	err = db.QueryRow("SELECT virus_name FROM samples WHERE md5_hash = ?", md5sum).Scan(&virusName)
+// 	if err == sql.ErrNoRows {
+// 		json.NewEncoder(w).Encode(map[string]interface{}{
+// 			"detected": false,
+// 			"hash":     md5sum,
+// 		})
+// 		return
+// 	} else if err != nil {
+// 		w.WriteHeader(http.StatusInternalServerError)
+// 		json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("DB error: %v", err)})
+// 		return
+// 	}
+
+// 	// Pindahkan ke quarantine
+// 	quarantineDir := "./quarantine"
+// 	os.MkdirAll(quarantineDir, 0755)
+
+// 	dstPath := filepath.Join(quarantineDir, handler.Filename)
+// 	dst, err := os.Create(dstPath)
+// 	if err != nil {
+// 		w.WriteHeader(http.StatusInternalServerError)
+// 		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to create quarantine file"})
+// 		return
+// 	}
+// 	defer dst.Close()
+
+// 	file.Seek(0, 0)
+// 	io.Copy(dst, file)
+
+// 	json.NewEncoder(w).Encode(map[string]interface{}{
+// 		"detected":    true,
+// 		"virus_name":  virusName,
+// 		"hash":        md5sum,
+// 		"quarantined": true,
+// 		"path":        dstPath,
+// 	})
+// }
 
 func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.db.GetStats()

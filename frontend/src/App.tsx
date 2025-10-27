@@ -56,28 +56,72 @@ const AntivirusApp = () => {
 
   const scanFile = async () => {
     if (!selectedFile) {
-      alert('Please enter a file path');
+      alert("Please select a file first");
       return;
     }
 
     setScanning(true);
     try {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
       const response = await fetch(`${API_URL}/scan`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file_path: selectedFile })
+        method: "POST",
+        body: formData, // ❗ jangan pakai Content-Type manual
       });
-      
-      const result = await response.json();
-      setScanResults([result, ...scanResults]);
-      fetchStats();
+
+      // Pastikan response JSON
+      const text = await response.text();
+      try {
+        const result = JSON.parse(text);
+        setScanResults([result, ...scanResults]);
+      } catch (err) {
+        console.error("Invalid JSON response:", text);
+        alert("Invalid JSON response from server:\n" + text);
+      }
+
     } catch (error) {
-      console.error('Scan failed:', error);
-      alert('Scan failed: ' + error.message);
+      console.error("Scan failed:", error);
+      alert("Scan failed: " + error.message);
     } finally {
       setScanning(false);
     }
   };
+
+  //   const scanFile = async () => {
+  //   if (!selectedFile) {
+  //     alert("Please select a file first!");
+  //     return;
+  //   }
+
+  //   setScanning(true);
+  //   setScanResults("");
+
+  //   try {
+  //     const formData = new FormData();
+  //     formData.append("file", selectedFile);
+
+  //     const res = await fetch(`${API_URL}/api/scan`, {
+  //       method: "POST",
+  //       body: formData,
+  //     });
+
+  //     if (!res.ok) throw new Error("Failed to scan file");
+
+  //     const data = await res.json();
+
+  //     if (data.detected) {
+  //       setScanResult(`⚠️ Detected: ${data.virus_name}`);
+  //     } else {
+  //       setScanResult("✅ File is clean");
+  //     }
+  //   } catch (err: any) {
+  //     console.error(err);
+  //     setScanResult("❌ Scan failed. Check backend logs.");
+  //   } finally {
+  //     setScanning(false);
+  //   }
+  // };
 
   const scanFolder = async () => {
     if (!selectedFolder) {
@@ -352,24 +396,32 @@ const addSample = async (e: React.FormEvent) => {
                 <FileText className="w-6 h-6 text-purple-400" />
                 <h3 className="text-xl font-bold text-white">Scan Single File</h3>
               </div>
-              <div className="flex space-x-3">
+
+              <div className="flex flex-col space-y-4">
                 <input
-                  type="text"
-                  value={selectedFile}
-                  onChange={(e) => setSelectedFile(e.target.value)}
-                  placeholder="Enter file path (e.g., C:\path\to\file.exe)"
-                  className="flex-1 bg-slate-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  type="file"
+                  onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                  className="block w-full text-sm text-slate-300
+                            file:mr-4 file:py-2 file:px-4
+                            file:rounded-md file:border-0
+                            file:text-sm file:font-semibold
+                            file:bg-purple-600 file:text-white
+                            hover:file:bg-purple-700"
                 />
+
                 <button
                   onClick={scanFile}
                   disabled={scanning}
-                  className="bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center space-x-2"
+                  className="bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600
+                            text-white px-6 py-3 rounded-lg font-medium
+                            transition-colors flex items-center justify-center space-x-2"
                 >
                   <Search className="w-5 h-5" />
-                  <span>{scanning ? 'Scanning...' : 'Scan File'}</span>
+                  <span>{scanning ? "Scanning..." : "Scan File"}</span>
                 </button>
               </div>
             </div>
+
 
             {/* Folder Scanner */}
             <div className="bg-slate-800 rounded-xl shadow-lg p-6">
