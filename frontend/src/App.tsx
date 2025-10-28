@@ -93,7 +93,7 @@ const scanFile = async () => {
   }
 };
 
-  const scanFolder = async () => {
+const scanFolder = async () => {
     if (!selectedFolder) {
       alert('Please enter a folder path');
       return;
@@ -106,10 +106,34 @@ const scanFile = async () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ folder_path: selectedFolder })
       });
-      
-      const results = await response.json();
-      setScanResults([...results, ...scanResults]);
-      fetchStats();
+
+      const text = await response.text();
+      try {
+        const results = JSON.parse(text);
+        if (!Array.isArray(results)) {
+          throw new Error("Invalid response from server. Expected an array.");
+        }
+
+        setScanResults([...results, ...scanResults]);
+        fetchStats();
+
+        const infectedFiles = results.filter(result => result.is_infected);
+        const numInfected = infectedFiles.length;
+
+        if (numInfected > 0) {
+          const fileText = numInfected === 1 ? 'file' : 'files';
+          alert(`${numInfected} threat(s) found! The infected ${fileText} have been moved to quarantine.`);
+          
+          setSelectedFolder(''); 
+        } else {
+          alert('Scan complete. No threats found in this folder.');
+        }
+
+      } catch (err) {
+        console.error("Invalid JSON response:", text, err);
+        alert("Invalid JSON response from server:\n" + text);
+      }
+
     } catch (error) {
       console.error('Folder scan failed:', error);
       alert('Folder scan failed: ' + error.message);
@@ -156,7 +180,6 @@ const handleBrowseFile = async () => {
 }
 
 const handleBrowseFolder = async () => {
-    // Panggil fungsi yang diekspos oleh preload.ts
     const folderPath = await window.electronAPI.openFolder();
     if (folderPath) {
       setSelectedFolder(folderPath); // Simpan path folder ke state
@@ -231,13 +254,8 @@ const addSample = async (e: React.FormEvent) => {
             <div className="flex items-center space-x-3">
               <Shield className="w-10 h-10 text-white" />
               <div>
-                <h1 className="text-2xl font-bold text-white">SecureShield Antivirus</h1>
-                <p className="text-purple-100 text-sm">Real-time Protection System</p>
+                <h1 className="text-2xl font-bold text-white">SmAaf Antivirus</h1>
               </div>
-            </div>
-            <div className="flex items-center space-x-2 bg-white/10 px-4 py-2 rounded-lg backdrop-blur-sm">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              <span className="text-white text-sm font-medium">System Protected</span>
             </div>
           </div>
         </div>
