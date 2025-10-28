@@ -1,0 +1,5 @@
+--- BEGIN FAKE ENCRYPTION ---
+ENCRYPT: all your important files have been encoded!
+KEY: FAKE-KEY-12345
+This is a harmless simulation for antivirus testing only.
+--- END FAKE ENCRYPTION ---

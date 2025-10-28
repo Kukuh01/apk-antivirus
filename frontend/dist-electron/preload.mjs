@@ -5,7 +5,8 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
    * Membuka dialog file native dan mengembalikan path file yang dipilih.
    * @returns {Promise<string | null>} Path file atau null jika dibatalkan.
    */
-  openFile: () => electron.ipcRenderer.invoke("dialog:openFile")
+  openFile: () => electron.ipcRenderer.invoke("dialog:openFile"),
+  openFolder: () => electron.ipcRenderer.invoke("dialog:openFolder")
 });
 electron.contextBridge.exposeInMainWorld("ipcRenderer", {
   on: (channel, listener) => {

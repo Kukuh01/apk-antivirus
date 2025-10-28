@@ -15,10 +15,8 @@ function createWindow() {
     icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
-      // <-- 2. TAMBAHKAN INI! Wajib agar preload.ts berfungsi
       contextIsolation: true,
       nodeIntegration: false
-      // Praktik keamanan yang baik
     }
   });
   win.webContents.on("did-finish-load", () => {
@@ -44,7 +42,16 @@ app.on("activate", () => {
 async function handleFileOpen() {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ["openFile"]
-    // Hanya izinkan pilih satu file
+  });
+  if (canceled) {
+    return null;
+  } else {
+    return filePaths[0];
+  }
+}
+async function handleFolderOpen() {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ["openDirectory"]
   });
   if (canceled) {
     return null;
@@ -54,6 +61,7 @@ async function handleFileOpen() {
 }
 app.whenReady().then(() => {
   ipcMain.handle("dialog:openFile", handleFileOpen);
+  ipcMain.handle("dialog:openFolder", handleFolderOpen);
   createWindow();
 });
 export {

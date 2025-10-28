@@ -155,6 +155,14 @@ const handleBrowseFile = async () => {
   }
 }
 
+const handleBrowseFolder = async () => {
+    // Panggil fungsi yang diekspos oleh preload.ts
+    const folderPath = await window.electronAPI.openFolder();
+    if (folderPath) {
+      setSelectedFolder(folderPath); // Simpan path folder ke state
+    }
+  };
+
 const [fileToUpload, setFileToUpload] = useState<File | null>(null);
 
 const addSample = async (e: React.FormEvent) => {
@@ -383,23 +391,35 @@ const addSample = async (e: React.FormEvent) => {
                 <Folder className="w-6 h-6 text-blue-400" />
                 <h3 className="text-xl font-bold text-white">Scan Folder</h3>
               </div>
-              <div className="flex space-x-3">
+              
+              {/* Ganti UI input text + tombol scan menjadi seperti "Scan File" */}
+              <div className="flex space-x-3 mb-4">
                 <input
                   type="text"
-                  value={selectedFolder}
-                  onChange={(e) => setSelectedFolder(e.target.value)}
-                  placeholder="Enter folder path (e.g., C:\Users\Downloads)"
+                  readOnly // Buat read-only
+                  value={selectedFolder} // Tampilkan path yang dipilih
+                  placeholder="Click 'Browse' to select a folder..."
                   className="flex-1 bg-slate-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <button
-                  onClick={scanFolder}
-                  disabled={scanning}
-                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center space-x-2"
+                  onClick={handleBrowseFolder} // Panggil handler browse folder
+                  className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
                 >
-                  <Search className="w-5 h-5" />
-                  <span>{scanning ? 'Scanning...' : 'Scan Folder'}</span>
+                  Browse...
                 </button>
               </div>
+              
+              {/* Tombol Scan Folder sekarang ada di baris terpisah */}
+              <button
+                onClick={scanFolder}
+                disabled={scanning || !selectedFolder}
+                className="bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600
+                            text-white px-6 py-3 rounded-lg font-medium
+                            transition-colors flex items-center justify-center space-x-2"
+              >
+                <Search className="w-5 h-5" />
+                <span>{scanning ? 'Scanning...' : 'Scan Folder'}</span>
+              </button>
             </div>
 
             {/* Scan Results */}
