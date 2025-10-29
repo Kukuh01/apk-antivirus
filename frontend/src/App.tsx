@@ -254,7 +254,7 @@ const addSample = async (e: React.FormEvent) => {
             <div className="flex items-center space-x-3">
               <Shield className="w-10 h-10 text-white" />
               <div>
-                <h1 className="text-2xl font-bold text-white">SmAaf Antivirus</h1>
+                <h1 className="text-2xl font-bold text-white">SMAAV Antivirus</h1>
               </div>
             </div>
           </div>
