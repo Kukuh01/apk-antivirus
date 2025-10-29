@@ -27,10 +27,10 @@ const AntivirusApp = () => {
   const [signatures, setSignatures] = useState([]);
   const [scanResults, setScanResults] = useState([]);
   const [scanning, setScanning] = useState(false);
-  const [selectedFilePath, setSelectedFilePath] = useState('');
-  const [selectedFolder, setSelectedFolder] = useState('');
+  const [selectedFilePath, setSelectedFilePath] = useState("");
+  const [selectedFolder, setSelectedFolder] = useState("");
   const [isOpen, setIsOpen] = useState(false);
-  
+
   // Form states
   const [newSignature, setNewSignature] = useState({
     name: "",
@@ -72,46 +72,46 @@ const AntivirusApp = () => {
     }
   };
 
-const scanFile = async () => {
-  if (!selectedFilePath) {
-    alert("Please select a file first");
-    return;
-  }
-
-  setScanning(true);
-  try {
-    const response = await fetch(`${API_URL}/scan-path`, {
-      method: "POST",
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ file_path: selectedFilePath })
-    });
-
-    const text = await response.text();
-    try {
-      const result = JSON.parse(text);
-      setScanResults([result, ...scanResults]);
-
-      if (result.is_infected) {
-        alert(`Threat found and quarantined! Original file at ${selectedFilePath} has been moved.`);
-        setSelectedFilePath('');
-      }
-
-    } catch (err) {
-      console.error("Invalid JSON response:", text);
-      alert("Invalid JSON response from server:\n" + text);
+  const scanFile = async () => {
+    if (!selectedFilePath) {
+      alert("Please select a file first");
+      return;
     }
 
-  } catch (error) {
-    console.error("Scan failed:", error);
-    alert("Scan failed: " + error.message);
-  } finally {
-    setScanning(false);
-  }
-};
+    setScanning(true);
+    try {
+      const response = await fetch(`${API_URL}/scan-path`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ file_path: selectedFilePath }),
+      });
 
-const scanFolder = async () => {
+      const text = await response.text();
+      try {
+        const result = JSON.parse(text);
+        setScanResults([result, ...scanResults]);
+
+        if (result.is_infected) {
+          alert(
+            `Threat found and quarantined! Original file at ${selectedFilePath} has been moved.`
+          );
+          setSelectedFilePath("");
+        }
+      } catch (err) {
+        console.error("Invalid JSON response:", text);
+        alert("Invalid JSON response from server:\n" + text);
+      }
+    } catch (error) {
+      console.error("Scan failed:", error);
+      alert("Scan failed: " + error.message);
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const scanFolder = async () => {
     if (!selectedFolder) {
       alert("Please enter a folder path");
       return;
@@ -135,23 +135,23 @@ const scanFolder = async () => {
         setScanResults([...results, ...scanResults]);
         fetchStats();
 
-        const infectedFiles = results.filter(result => result.is_infected);
+        const infectedFiles = results.filter((result) => result.is_infected);
         const numInfected = infectedFiles.length;
 
         if (numInfected > 0) {
-          const fileText = numInfected === 1 ? 'file' : 'files';
-          alert(`${numInfected} threat(s) found! The infected ${fileText} have been moved to quarantine.`);
-          
-          setSelectedFolder(''); 
-        } else {
-          alert('Scan complete. No threats found in this folder.');
-        }
+          const fileText = numInfected === 1 ? "file" : "files";
+          alert(
+            `${numInfected} threat(s) found! The infected ${fileText} have been moved to quarantine.`
+          );
 
+          setSelectedFolder("");
+        } else {
+          alert("Scan complete. No threats found in this folder.");
+        }
       } catch (err) {
         console.error("Invalid JSON response:", text, err);
         alert("Invalid JSON response from server:\n" + text);
       }
-
     } catch (error) {
       console.error("Folder scan failed:", error);
       alert("Folder scan failed: " + error.message);
@@ -194,61 +194,66 @@ const scanFolder = async () => {
     }
   };
 
-const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  const f = e.target.files?.[0];
-  if (f) setFileToUpload(f);
-};
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) setFileToUpload(f);
+  };
 
-const handleBrowseFile = async () => {
-  const filePath = await window.electronAPI.openFile();
-  if (filePath) {
-    setSelectedFilePath(filePath);
-  }
-}
+  const handleBrowseFile = async () => {
+    const filePath = await window.electronAPI.openFile();
+    if (filePath) {
+      setSelectedFilePath(filePath);
+    }
+  };
 
-const handleBrowseFolder = async () => {
+  const handleBrowseFolder = async () => {
     const folderPath = await window.electronAPI.openFolder();
     if (folderPath) {
       setSelectedFolder(folderPath); // Simpan path folder ke state
     }
   };
 
-const [fileToUpload, setFileToUpload] = useState<File | null>(null);
+  const [fileToUpload, setFileToUpload] = useState<File | null>(null);
 
-const addSample = async (e: React.FormEvent) => {
-  e.preventDefault();
-  if (!fileToUpload) return alert('Pilih file sample terlebih dahulu');
-  if (!newSample.virus_name) return alert('Isi nama virus');
+  const addSample = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fileToUpload) return alert("Pilih file sample terlebih dahulu");
+    if (!newSample.virus_name) return alert("Isi nama virus");
 
-  try {
-    const form = new FormData();
-    form.append('file', fileToUpload);
-    form.append('name', newSample.virus_name);
-    form.append('severity', newSample.severity);
-    form.append('description', newSample.description || '');
+    try {
+      const form = new FormData();
+      form.append("file", fileToUpload);
+      form.append("name", newSample.virus_name);
+      form.append("severity", newSample.severity);
+      form.append("description", newSample.description || "");
 
-    const res = await fetch(`${API_URL}/add-sample`, {
-      method: 'POST',
-      body: form,
-    });
+      const res = await fetch(`${API_URL}/add-sample`, {
+        method: "POST",
+        body: form,
+      });
 
-    if (!res.ok) {
-      const t = await res.text();
-      throw new Error(t || `HTTP ${res.status}`);
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json(); // { md5: '', binary_pattern: '' }
+      // update UI state, fetchSignatures, dsb.
+      await fetchSignatures();
+      await fetchStats();
+      setNewSample({
+        file_path: "",
+        virus_name: "",
+        severity: "Medium",
+        description: "",
+      });
+      setFileToUpload(null);
+      alert(`Sample added. MD5: ${data.md5}`);
+    } catch (err: any) {
+      console.error(err);
+      alert("Failed to upload sample: " + (err.message ?? err));
     }
-
-    const data = await res.json(); // { md5: '', binary_pattern: '' }
-    // update UI state, fetchSignatures, dsb.
-    await fetchSignatures();
-    await fetchStats();
-    setNewSample({ file_path: '', virus_name: '', severity: 'Medium', description: '' });
-    setFileToUpload(null);
-    alert(`Sample added. MD5: ${data.md5}`);
-  } catch (err: any) {
-    console.error(err);
-    alert('Failed to upload sample: ' + (err.message ?? err));
-  }
-};
+  };
 
   const deleteSignature = async (id) => {
     if (!confirm("Are you sure you want to delete this signature?")) return;
@@ -273,15 +278,17 @@ const addSample = async (e: React.FormEvent) => {
   };
 
   return (
-    <div className="min-h-screen w-screen overflow-x-hidden bg-slate-700">
+    <div className="min-h-screen w-screen overflow-x-hidden bg-green-900/50">
       {/* Header */}
-      <div className="bg-linear-to-r from-red-600 to-blue-600 shadow-lg">
-        <div className="max-w-7xl mx-auto py-4">
+      <div className="bg-linear-to-r from-green-500 to-green-900 shadow-lg">
+        <div className="max-w-7xl mx-auto py-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <Shield className="w-10 h-10 text-white" />
               <div>
-                <h1 className="text-2xl font-bold text-white">SMAAV Antivirus</h1>
+                <h1 className="text-2xl font-bold text-white">
+                  SMAAV Antivirus
+                </h1>
               </div>
             </div>
           </div>
@@ -323,11 +330,11 @@ const addSample = async (e: React.FormEvent) => {
           {isOpen && (
             <nav className="md:hidden flex flex-col space-y-1 pb-3 border-t border-slate-700 bg-slate-800">
               {[
-              { id: "dashboard", label: "Dashboard", icon: Shield },
-              { id: "scanner", label: "Scanner", icon: Search },
-              { id: "database", label: "Virus Database", icon: Database },
-              { id: "update", label: "Add Sample", icon: Plus },
-            ].map((tab) => (
+                { id: "dashboard", label: "Dashboard", icon: Shield },
+                { id: "scanner", label: "Scanner", icon: Search },
+                { id: "database", label: "Virus Database", icon: Database },
+                { id: "update", label: "Add Sample", icon: Plus },
+              ].map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => {
@@ -336,8 +343,8 @@ const addSample = async (e: React.FormEvent) => {
                   }}
                   className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all ${
                     activeTab === tab.id
-                      ? "bg-purple-600 text-white"
-                      : "text-slate-300 hover:bg-slate-700 hover:text-white"
+                      ? "bg-purple-200! text-white"
+                      : "text-slate-300 hover:bg-red-700 hover:text-white"
                   }`}
                 >
                   <tab.icon className="w-4 h-4" />
@@ -469,7 +476,7 @@ const addSample = async (e: React.FormEvent) => {
                 </h3>
               </div>
 
-            {/* --- BLOK YANG DIUBAH --- */}
+              {/* --- BLOK YANG DIUBAH --- */}
               <div className="flex space-x-3 mb-4">
                 <input
                   type="text"
@@ -487,17 +494,17 @@ const addSample = async (e: React.FormEvent) => {
               </div>
               {/* --- AKHIR BLOK --- */}
 
-                <button
-                  onClick={scanFile}
-                  disabled={scanning || !selectedFilePath}
-                  className="bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600
+              <button
+                onClick={scanFile}
+                disabled={scanning || !selectedFilePath}
+                className="bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600
                             text-white px-6 py-3 rounded-lg font-medium
                             transition-colors flex items-center justify-center space-x-2"
-                >
-                  <Search className="w-5 h-5" />
-                  <span>{scanning ? "Scanning..." : "Scan File"}</span>
-                </button>
-              </div>
+              >
+                <Search className="w-5 h-5" />
+                <span>{scanning ? "Scanning..." : "Scan File"}</span>
+              </button>
+            </div>
 
             {/* Folder Scanner */}
             <div className="bg-slate-800 rounded-xl shadow-lg p-6">
@@ -505,7 +512,7 @@ const addSample = async (e: React.FormEvent) => {
                 <Folder className="w-6 h-6 text-blue-400" />
                 <h3 className="text-xl font-bold text-white">Scan Folder</h3>
               </div>
-              
+
               {/* Ganti UI input text + tombol scan menjadi seperti "Scan File" */}
               <div className="flex space-x-3 mb-4">
                 <input
@@ -522,7 +529,7 @@ const addSample = async (e: React.FormEvent) => {
                   Browse...
                 </button>
               </div>
-              
+
               {/* Tombol Scan Folder sekarang ada di baris terpisah */}
               <button
                 onClick={scanFolder}
@@ -532,7 +539,7 @@ const addSample = async (e: React.FormEvent) => {
                             transition-colors flex items-center justify-center space-x-2"
               >
                 <Search className="w-5 h-5" />
-                <span>{scanning ? 'Scanning...' : 'Scan Folder'}</span>
+                <span>{scanning ? "Scanning..." : "Scan Folder"}</span>
               </button>
             </div>
 
@@ -827,14 +834,19 @@ const addSample = async (e: React.FormEvent) => {
 
               <form onSubmit={addSample} className="space-y-4">
                 <div>
-                  <label className="block text-slate-300 mb-2 font-medium">Sample File *</label>
+                  <label className="block text-slate-300 mb-2 font-medium">
+                    Sample File *
+                  </label>
                   <input
                     type="file"
                     accept="*/*"
                     onChange={handleFileChange}
                     className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg"
                   />
-                  <p className="text-slate-400 text-sm mt-2">Pilih file sample (malware) — file akan di-hash & disimpan hanya hash/pattern di DB.</p>
+                  <p className="text-slate-400 text-sm mt-2">
+                    Pilih file sample (malware) — file akan di-hash & disimpan
+                    hanya hash/pattern di DB.
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
